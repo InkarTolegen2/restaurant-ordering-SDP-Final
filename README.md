@@ -1,82 +1,33 @@
 # Restaurant Ordering System
 
-Java 17, Maven, JUnit 5. Web client: HTML/CSS/JS.
-Backend: REST API on the JDK built-in HTTP server (`com.sun.net.httpserver`) with a small own JSON parser, so no external libraries are needed.
+This is our group project for the Software Design Patterns course. It is a small restaurant ordering app: a guest picks dishes, the kitchen cooks them, and the guest can see on their phone or laptop when the order is ready.
 
-```
-backend/
-  src/main/java/restaurant/
-    Main.java            starts the web server on http://localhost:7070
-    meal/                Meal, Pizza, Burger, Drink, MealFactory, MealDemo        (person 1)
-    decorator/           MealDecorator, Cheese/Sauce/LargeSizeDecorator, Toppings (person 1)
-    order/               Order, OrderBuilder, OrderStatus, OrderDemo              (person 2)
-    observer/            OrderListener, KitchenListener, CustomerListener         (person 2)
-    payment/             PaymentStrategy, NoDiscount, PercentDiscount,
-                         PromoCodeDiscount, PaymentContext, PaymentDemo           (person 3)
-    facade/              RestaurantFacade                                         (person 3)
-    api/                 Routes (REST endpoints + static files), Json             (person 3)
-  src/test/java/restaurant/
-    meal/MealFactoryDecoratorTest.java
-    order/OrderObserverTest.java
-    facade/RestaurantFacadeTest.java
-    api/JsonTest.java, api/RoutesTest.java   (starts the server and calls the API over HTTP)
-frontend/
-  index.html    + js/menu.js      menu, toppings, price recalculation
-  cart.html     + js/cart.js      cart, table/comment, discount (Strategy), card/cash, POST /order
-  status.html   + js/status.js    order status NEW -> COOKING -> READY, polling every 2 s
-  kitchen.html  + js/kitchen.js   kitchen board, moves orders forward, polling every 3 s
-  js/api.js                       REST calls + demo mode in localStorage when the backend is offline
-  css/style.css
-docs/
-  factory-decorator/   report, UML, screenshots (person 1)
-  builder-observer/    report, sequence diagram (person 2)
-  screenshots/         cart, status, kitchen pages
-```
+## What the app does
 
-## Run
+Imagine a guest sitting at table 7. They open the menu, choose a pizza, add extra cheese and a large size, and the price updates right away. They put it in the cart, type the table number, choose a discount (or enter a promo code), pick card or cash and send the order. In the kitchen, the cook sees the new order and presses "Start cooking", and later "Mark ready". The guest's page updates by itself every couple of seconds: first "Your order is received", then "Being cooked", then "Ready".
 
-**Web app (backend + frontend):** run `restaurant.Main` (green ▶ in IntelliJ, or `cd backend` → `mvn compile exec:java`),
-then open http://localhost:7070. Kitchen panel: http://localhost:7070/kitchen.html
-(open it in a second tab, move the order forward and watch the status page and the server console).
+We built it to show that design patterns are not just theory. In this project six of them work together, and each one solves a real problem in the flow above.
 
-**Tests and console demos:**
+## Who did what
 
-```
-cd backend
-mvn test
-mvn compile exec:java -Dexec.mainClass=restaurant.meal.MealDemo        # Factory + Decorator
-mvn compile exec:java -Dexec.mainClass=restaurant.order.OrderDemo      # Builder + Observer
-mvn compile exec:java -Dexec.mainClass=restaurant.payment.PaymentDemo  # Strategy
-```
+Magzhan worked on the Factory and Decorator patterns. He made the meal classes and MealFactory, which creates a pizza, a burger or a drink by its type. He also made the toppings (extra cheese, sauce, large size) as decorators: each topping wraps a meal and adds its own price and description, so we do not need a separate class for every combination. Magzhan also built the menu page with the price recalculation and wrote the report part about these two patterns.
 
-**Frontend only (demo mode, no Java):** `python -m http.server` inside `frontend/`, open http://localhost:8000.
-Orders are then kept in the browser's localStorage.
+Alexander worked on the Builder and Observer patterns. He made OrderBuilder, which collects the dishes, the table number and the comment and checks them in build(), so an order without dishes or without a table cannot be created. He also made the Order class with the statuses NEW, COOKING and READY. When the status changes, KitchenListener and CustomerListener are notified automatically, and Order does not even need to know who is listening. Alexander also built the cart, the order status page and the kitchen panel, and wrote the report part about Builder and Observer with the sequence diagram.
 
-## Contracts for the team
+Inkar Tolegen worked on the Strategy and Facade patterns. She made the discount strategies (no discount, a percent discount and a promo code), so the way the price is calculated can be swapped without touching the rest of the code. She also made RestaurantFacade: one placeOrder() call runs the whole chain of factory, decorators, builder, discount and listeners. On top of it she built the REST API and the checkout part of the cart page. Inkar also wrote the report part about Strategy and Facade, the general class diagram, the introduction and the conclusion.
 
-**REST API (person 3):**
-- `GET /menu` → `{ "meals": [{type, name, description, price}], "toppings": [{id, name, label, price}] }`
-  — build it from `MealFactory.TYPES` + `MealFactory.create(type)`, and `Toppings.NAMES`
-  (prices: `CheeseDecorator.PRICE`, `SauceDecorator.PRICE`, `LargeSizeDecorator.PRICE`).
-- `POST /order` body:
-  `{ table, comment, payment: "card"|"cash", discount: {type: "none"|"percent"|"promo", value}, items: [{type, toppings: ["cheese","large"], qty}] }`
-  → `{ id, status, total, finalTotal, discountName }`.
-  In the facade: `Toppings.applyAll(MealFactory.create(type), toppings)` → `builder.addDish(meal)` (qty times);
-  discount `none` → `NoDiscount`, `percent` → `PercentDiscount(value)`, `promo` → `PromoCodeDiscount(value)`.
-- `GET /order/{id}/status` → `{ id, status }`
-- `GET /orders` → list of orders `{ id, table, comment, payment, items: [{type, description, qty, unitPrice}], total, finalTotal, discountName, status, createdAt }` (kitchen + status page)
-- `POST /order/{id}/status` body `{ status }` → calls `order.setStatus(...)`, which notifies the listeners; 400 if the step is not allowed.
+Together we connected the pages with the server, tested the whole path of an order, fixed bugs, made the screenshots and prepared the demo.
 
-The frontend copies the discount rules (10 %, promo FIRST = 15 %) in `js/api.js` → keep them in sync with `restaurant.payment`.
+## What we used
 
-**Cart in localStorage (person 2, cart.html):** key `cart`, array of
-`{ type, name, description, toppings: [id...], unitPrice, qty }`.
-Helpers `getCart()`, `saveCart()`, `formatPrice()` are in `js/api.js`.
+The backend is written in Java 17 with Maven, and the tests use JUnit 5. The REST API runs on the HTTP server built into the JDK, so no extra libraries are needed. The web pages are plain HTML, CSS and JavaScript, and they learn about status changes by asking the server every few seconds. If the server is not running, the pages still work in a demo mode and keep the orders in the browser, which is handy for showing the interface.
 
-## Changes to person 2's code
+## How to run
 
-- Classes moved into packages `restaurant.order` and `restaurant.observer` (only `package`/`import` lines changed).
-- `OrderBuilder.addDish(Meal)` added (the old `addDish(String)` is kept); `Order` got `getMeals()` and `getTotalPrice()`.
-- All 5 original tests still pass.
+You need a JDK 17 or newer. On Windows double-click run.bat, on macOS or Linux run ./run.sh, or just start the App class in IntelliJ IDEA. Then open http://localhost:7070 in your browser and keep the console window open. To see the Observer work, open kitchen.html in a second tab, press "Start cooking" there and watch the status page of your order change by itself. The messages from the kitchen and the customer listeners also appear in the server console. The tests run with "mvn test" in the backend folder.
 
-Person 3's `payment` package is copied without changes.
+## Conclusion
+
+The project follows the whole life of an order, from choosing a dish to the moment the kitchen marks it ready. Every pattern has its own job: Factory and Decorator make the menu flexible, Builder keeps orders valid, Strategy makes discounts replaceable, Observer tells the kitchen and the guest about every change, and Facade lets the web pages use all of this through a few simple requests. Because our parts met only on small interfaces, each of us could write and test our own part first and then connect everything.
+
+The project has limits. Orders are stored in memory and disappear when the server stops, there is no login, and payment is only a choice between card and cash. In the future we would add a database, use WebSocket instead of polling and add more kinds of discounts.
